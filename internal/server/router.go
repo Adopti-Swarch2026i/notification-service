@@ -30,5 +30,26 @@ func NewRouter(logLevel string, repo repository.NotificationRepository, pushHand
 		api.POST("/device-tokens", pushHandler.RegisterDeviceToken)
 	}
 
+	api.GET("/notifications", func(c *gin.Context) {
+		userID := c.Query("userId")
+		if userID == "" {
+			c.JSON(400, gin.H{"error": "userId query param is required"})
+			return
+		}
+		status := c.Query("status") // optional
+
+		// simple hardcoded pagination for the prototype
+		limit := 50
+		offset := 0
+
+		notifications, err := repo.FindByUserID(c.Request.Context(), userID, status, limit, offset)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"data": notifications})
+	})
+
 	return r
 }

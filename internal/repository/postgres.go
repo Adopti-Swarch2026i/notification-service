@@ -59,15 +59,23 @@ func (r *PostgresRepo) Save(ctx context.Context, n *domain.Notification) error {
 	return nil
 }
 
-func (r *PostgresRepo) FindByUserID(ctx context.Context, userID string, limit, offset int) ([]*domain.Notification, error) {
+func (r *PostgresRepo) FindByUserID(ctx context.Context, userID, status string, limit, offset int) ([]*domain.Notification, error) {
 	query := `
 		SELECT id, user_id, event_id, event_type, channel, status, payload, created_at 
 		FROM notifications
-		WHERE user_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`
-	rows, err := r.pool.Query(ctx, query, userID, limit, offset)
+		WHERE user_id = $1`
+	
+	args := []any{userID}
+
+	if status != "" {
+		query += ` AND status = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4`
+		args = append(args, status, limit, offset)
+	} else {
+		query += ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+		args = append(args, limit, offset)
+	}
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query notifications: %w", err)
 	}
