@@ -13,6 +13,7 @@ type Config struct {
 	SendGridFromEmail   string
 	FirebaseCredentials string
 	LogLevel            string
+	TestEmail           string
 }
 
 func Load() (*Config, error) {
@@ -24,6 +25,7 @@ func Load() (*Config, error) {
 		SendGridFromEmail:   os.Getenv("SENDGRID_FROM_EMAIL"),
 		FirebaseCredentials: os.Getenv("FIREBASE_CREDENTIALS"),
 		LogLevel:            os.Getenv("LOG_LEVEL"),
+		TestEmail:           os.Getenv("TEST_EMAIL"),
 	}
 
 	if cfg.Port == "" {

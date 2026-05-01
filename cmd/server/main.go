@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adopti/notification-service/internal/config"
+	"github.com/adopti/notification-service/internal/handlers"
 	"github.com/adopti/notification-service/internal/messaging"
 	"github.com/adopti/notification-service/internal/repository"
 	"github.com/adopti/notification-service/internal/server"
@@ -44,7 +45,8 @@ func main() {
 	if err != nil {
 		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.Error(err))
 	}
-	dispatcher := messaging.NewDispatcher(logger)
+	emailHandler := handlers.NewEmailHandler(cfg, postgresRepo, logger)
+	dispatcher := messaging.NewDispatcher(logger, emailHandler)
 
 	go func() {
 		if err := consumer.Start(consumerCtx, dispatcher.Dispatch); err != nil && !errors.Is(err, context.Canceled) {
