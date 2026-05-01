@@ -13,14 +13,19 @@ type EmailHandler interface {
 	HandlePetReportReunited(ctx context.Context, eventID string, evt PetReportReunitedEvent, rawPayload string) error
 }
 
+type PushHandler interface {
+	HandleChatMessageSent(ctx context.Context, eventID string, evt ChatMessageSentEvent, rawPayload string) error
+}
+
 type Dispatcher struct {
 	logger       *zap.Logger
 	emailHandler EmailHandler
+	pushHandler  PushHandler
 }
 
-// NewDispatcher accepts the handler
-func NewDispatcher(logger *zap.Logger, emailHandler EmailHandler) *Dispatcher {
-	return &Dispatcher{logger: logger, emailHandler: emailHandler}
+// NewDispatcher accepts the handlers
+func NewDispatcher(logger *zap.Logger, emailHandler EmailHandler, pushHandler PushHandler) *Dispatcher {
+	return &Dispatcher{logger: logger, emailHandler: emailHandler, pushHandler: pushHandler}
 }
 
 func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
@@ -71,7 +76,25 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 		}
 		delivery.Ack(false)
 
-	case "match.found", "chat.message.sent":
+	case "chat.message.sent":
+		if d.pushHandler != nil {
+			var evt ChatMessageSentEvent
+			if err := json.Unmarshal(delivery.Body, &evt); err == nil {
+				err = d.pushHandler.HandleChatMessageSent(ctx, eventId, evt, rawPayload)
+				if err != nil {
+					d.logger.Error("Failed to handle chat.message.sent push", zap.Error(err))
+					delivery.Nack(false, false)
+					return
+				}
+			} else {
+				d.logger.Error("Failed to parse chat.message.sent", zap.Error(err))
+				delivery.Nack(false, false)
+				return
+			}
+		}
+		delivery.Ack(false)
+
+	case "match.found":
 		d.logger.Info("handler not implemented yet", zap.String("routingKey", delivery.RoutingKey))
 		delivery.Ack(false)
 

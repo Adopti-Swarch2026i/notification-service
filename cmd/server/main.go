@@ -45,8 +45,12 @@ func main() {
 	if err != nil {
 		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.Error(err))
 	}
+	pushHandler, err := handlers.NewPushHandler(cfg, postgresRepo, logger)
+	if err != nil {
+		logger.Warn("Push handler initialization failed", zap.Error(err))
+	}
 	emailHandler := handlers.NewEmailHandler(cfg, postgresRepo, logger)
-	dispatcher := messaging.NewDispatcher(logger, emailHandler)
+	dispatcher := messaging.NewDispatcher(logger, emailHandler, pushHandler)
 
 	go func() {
 		if err := consumer.Start(consumerCtx, dispatcher.Dispatch); err != nil && !errors.Is(err, context.Canceled) {
@@ -54,7 +58,7 @@ func main() {
 		}
 	}()
 
-	router := server.NewRouter(cfg.LogLevel, postgresRepo)
+	router := server.NewRouter(cfg.LogLevel, postgresRepo, pushHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

@@ -5,7 +5,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(logLevel string, repo repository.NotificationRepository) *gin.Engine {
+type PushRoutable interface {
+	RegisterDeviceToken(c *gin.Context)
+}
+
+func NewRouter(logLevel string, repo repository.NotificationRepository, pushHandler PushRoutable) *gin.Engine {
 	if logLevel != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
@@ -20,6 +24,11 @@ func NewRouter(logLevel string, repo repository.NotificationRepository) *gin.Eng
 			"service": "notification-service",
 		})
 	})
+
+	api := r.Group("/api")
+	if pushHandler != nil {
+		api.POST("/device-tokens", pushHandler.RegisterDeviceToken)
+	}
 
 	return r
 }
