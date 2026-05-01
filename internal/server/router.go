@@ -1,10 +1,11 @@
 package server
 
 import (
+	"github.com/adopti/notification-service/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(logLevel string) *gin.Engine {
+func NewRouter(logLevel string, repo repository.NotificationRepository) *gin.Engine {
 	if logLevel != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {

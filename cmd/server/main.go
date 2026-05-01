@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adopti/notification-service/internal/config"
+	"github.com/adopti/notification-service/internal/repository"
 	"github.com/adopti/notification-service/internal/server"
 	"go.uber.org/zap"
 )
@@ -30,7 +31,14 @@ func main() {
 	}
 	defer logger.Sync()
 
-	router := server.NewRouter(cfg.LogLevel)
+	repoCtx, repoCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer repoCancel()
+	postgresRepo, err := repository.NewPostgresRepo(repoCtx, cfg.PostgresDSN)
+	if err != nil {
+		logger.Fatal("Failed to initialize postgres repository", zap.Error(err))
+	}
+
+	router := server.NewRouter(cfg.LogLevel, postgresRepo)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
