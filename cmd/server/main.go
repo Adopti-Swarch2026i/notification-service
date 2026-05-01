@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adopti/notification-service/internal/config"
+	"github.com/adopti/notification-service/internal/messaging"
 	"github.com/adopti/notification-service/internal/repository"
 	"github.com/adopti/notification-service/internal/server"
 	"go.uber.org/zap"
@@ -38,6 +39,19 @@ func main() {
 		logger.Fatal("Failed to initialize postgres repository", zap.Error(err))
 	}
 
+	consumerCtx, consumerCancel := context.WithCancel(context.Background())
+	consumer, err := messaging.NewConsumer(cfg.RabbitMQURL, logger)
+	if err != nil {
+		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.Error(err))
+	}
+	dispatcher := messaging.NewDispatcher(logger)
+
+	go func() {
+		if err := consumer.Start(consumerCtx, dispatcher.Dispatch); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("Consumer stopped", zap.Error(err))
+		}
+	}()
+
 	router := server.NewRouter(cfg.LogLevel, postgresRepo)
 
 	srv := &http.Server{
@@ -56,6 +70,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down server...")
+
+	consumerCancel()
+	consumer.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
