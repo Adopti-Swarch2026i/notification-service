@@ -7,7 +7,8 @@ import (
 )
 
 type PetReportCreatedEvent struct {
-	PetID     string    `json:"petId"`
+	PetID     int64     `json:"petId"`
+	ReportID  int64     `json:"reportId"`
 	OwnerID   string    `json:"ownerId"`
 	Type      string    `json:"type"`
 	Breed     string    `json:"breed"`
@@ -18,14 +19,14 @@ type PetReportCreatedEvent struct {
 }
 
 type PetReportReunitedEvent struct {
-	PetID      string    `json:"petId"`
+	PetID      int64     `json:"petId"`
 	OwnerID    string    `json:"ownerId"`
 	ReunitedAt time.Time `json:"reunitedAt"`
 }
 
 type MatchFoundEvent struct {
-	LostPetID  string         `json:"lostPetId"`
-	FoundPetID string         `json:"foundPetId"`
+	LostPetID  int64          `json:"lostPetId"`
+	FoundPetID int64          `json:"foundPetId"`
 	Score      float64        `json:"score"`
 	Criteria   map[string]any `json:"criteria"`
 }
@@ -35,7 +36,7 @@ type ChatMessageSentEvent struct {
 	SenderID       string    `json:"senderId"`
 	RecipientID    string    `json:"recipientId"`
 	ContentPreview string    `json:"contentPreview"`
-	Timestamp      time.Time `json:"timestamp"`
+	Timestamp      int64     `json:"timestamp"`
 }
 
 type EventEnvelope struct {

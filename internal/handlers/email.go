@@ -11,24 +11,27 @@ import (
 	"github.com/adopti/notification-service/internal/repository"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"firebase.google.com/go/v4/auth"
 	"go.uber.org/zap"
 )
 
 type EmailHandler struct {
-	apiKey    string
-	fromEmail string
-	testEmail string
-	repo      repository.NotificationRepository
-	logger    *zap.Logger
+	apiKey     string
+	fromEmail  string
+	testEmail  string
+	authClient *auth.Client
+	repo       repository.NotificationRepository
+	logger     *zap.Logger
 }
 
-func NewEmailHandler(cfg *config.Config, repo repository.NotificationRepository, logger *zap.Logger) *EmailHandler {
+func NewEmailHandler(cfg *config.Config, authClient *auth.Client, repo repository.NotificationRepository, logger *zap.Logger) *EmailHandler {
 	return &EmailHandler{
-		apiKey:    cfg.SendGridAPIKey,
-		fromEmail: cfg.SendGridFromEmail,
-		testEmail: cfg.TestEmail,
-		repo:      repo,
-		logger:    logger,
+		apiKey:     cfg.SendGridAPIKey,
+		fromEmail:  cfg.SendGridFromEmail,
+		testEmail:  cfg.TestEmail,
+		authClient: authClient,
+		repo:       repo,
+		logger:     logger,
 	}
 }
 
@@ -44,10 +47,20 @@ func (h *EmailHandler) HandlePetReportCreated(ctx context.Context, eventID strin
 
 	from := mail.NewEmail("Adopti Notifications", h.fromEmail)
 	subject := "Reporte creado — Adopti"
+	
 	toEmail := h.testEmail
+	if h.authClient != nil {
+		u, err := h.authClient.GetUser(ctx, evt.OwnerID)
+		if err == nil && u.Email != "" {
+			toEmail = u.Email
+		} else {
+			h.logger.Warn("Failed to resolve user email from Firebase, using fallback", zap.Error(err), zap.String("uid", evt.OwnerID))
+		}
+	}
 	if toEmail == "" {
 		toEmail = "test@example.com"
 	}
+	
 	to := mail.NewEmail("Adopti User", toEmail)
 	content := fmt.Sprintf("Tu reporte para %s %s en %s ha sido recibido.", evt.Breed, evt.Color, evt.City)
 	
@@ -86,12 +99,22 @@ func (h *EmailHandler) HandlePetReportReunited(ctx context.Context, eventID stri
 
 	from := mail.NewEmail("Adopti Notifications", h.fromEmail)
 	subject := "¡Tu mascota fue reunida! — Adopti"
+	
 	toEmail := h.testEmail
+	if h.authClient != nil {
+		u, err := h.authClient.GetUser(ctx, evt.OwnerID)
+		if err == nil && u.Email != "" {
+			toEmail = u.Email
+		} else {
+			h.logger.Warn("Failed to resolve user email from Firebase, using fallback", zap.Error(err), zap.String("uid", evt.OwnerID))
+		}
+	}
 	if toEmail == "" {
 		toEmail = "test@example.com"
 	}
+
 	to := mail.NewEmail("Adopti User", toEmail)
-	content := fmt.Sprintf("El reporte %s fue marcado como reunido el %s.", evt.PetID, evt.ReunitedAt.Format(time.RFC3339))
+	content := fmt.Sprintf("El reporte %d fue marcado como reunido el %s.", evt.PetID, evt.ReunitedAt.Format(time.RFC3339))
 
 	message := mail.NewSingleEmail(from, subject, to, content, content)
 	client := sendgrid.NewSendClient(h.apiKey)

@@ -12,9 +12,13 @@ import (
 
 	"github.com/adopti/notification-service/internal/config"
 	"github.com/adopti/notification-service/internal/handlers"
-	"github.com/adopti/notification-service/internal/messaging"
+	msg "github.com/adopti/notification-service/internal/messaging"
 	"github.com/adopti/notification-service/internal/repository"
 	"github.com/adopti/notification-service/internal/server"
+
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
+	"firebase.google.com/go/v4/messaging"
 	"go.uber.org/zap"
 )
 
@@ -41,16 +45,31 @@ func main() {
 	}
 
 	consumerCtx, consumerCancel := context.WithCancel(context.Background())
-	consumer, err := messaging.NewConsumer(cfg.RabbitMQURL, logger)
+	consumer, err := msg.NewConsumer(cfg.RabbitMQURL, logger)
 	if err != nil {
 		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.Error(err))
 	}
-	pushHandler, err := handlers.NewPushHandler(cfg, postgresRepo, logger)
+
+	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
-		logger.Warn("Push handler initialization failed", zap.Error(err))
+		logger.Warn("Failed to initialize firebase app globally", zap.Error(err))
 	}
-	emailHandler := handlers.NewEmailHandler(cfg, postgresRepo, logger)
-	dispatcher := messaging.NewDispatcher(logger, emailHandler, pushHandler)
+	var authClient *auth.Client
+	var msgClient *messaging.Client
+	if app != nil {
+		authClient, err = app.Auth(context.Background())
+		if err != nil {
+			logger.Warn("Failed to allocate firebase Auth client", zap.Error(err))
+		}
+		msgClient, err = app.Messaging(context.Background())
+		if err != nil {
+			logger.Warn("Failed to allocate firebase Messaging client", zap.Error(err))
+		}
+	}
+
+	pushHandler := handlers.NewPushHandler(msgClient, postgresRepo, logger)
+	emailHandler := handlers.NewEmailHandler(cfg, authClient, postgresRepo, logger)
+	dispatcher := msg.NewDispatcher(logger, emailHandler, pushHandler)
 
 	go func() {
 		if err := consumer.Start(consumerCtx, dispatcher.Dispatch); err != nil && !errors.Is(err, context.Canceled) {

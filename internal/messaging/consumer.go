@@ -47,22 +47,38 @@ func (c *Consumer) connect() error {
 		return err
 	}
 
-	args := amqp091.Table{
-		"x-dead-letter-exchange": "adopti.events.dlx",
-	}
-
-	_, err = ch.QueueDeclare(
-		"notifications.queue",
-		true,
-		false,
-		false,
-		false,
-		args,
-	)
+	err = ch.ExchangeDeclare("adopti.events.dlx", "topic", true, false, false, false, nil)
 	if err != nil {
 		ch.Close()
 		conn.Close()
 		return err
+	}
+
+	err = ch.ExchangeDeclare("adopti.events", "topic", true, false, false, false, nil)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return err
+	}
+
+	args := amqp091.Table{
+		"x-dead-letter-exchange": "adopti.events.dlx",
+	}
+
+	_, err = ch.QueueDeclare("notifications.queue", true, false, false, false, args)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return err
+	}
+
+	for _, key := range []string{"pet.report.*", "chat.message.sent", "match.found"} {
+		err = ch.QueueBind("notifications.queue", key, "adopti.events", false, nil)
+		if err != nil {
+			ch.Close()
+			conn.Close()
+			return err
+		}
 	}
 
 	c.conn = conn

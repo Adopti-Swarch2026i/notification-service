@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
-	"github.com/adopti/notification-service/internal/config"
 	"github.com/adopti/notification-service/internal/domain"
 	msg "github.com/adopti/notification-service/internal/messaging"
 	"github.com/adopti/notification-service/internal/repository"
@@ -25,24 +23,13 @@ type PushHandler struct {
 	mu         sync.RWMutex
 }
 
-func NewPushHandler(cfg *config.Config, repo repository.NotificationRepository, logger *zap.Logger) (*PushHandler, error) {
-	app, err := firebase.NewApp(context.Background(), nil)
-	if err != nil {
-		logger.Warn("Failed to initialize firebase app, pushes will fail", zap.Error(err))
-	}
-	var client *messaging.Client
-	if app != nil {
-		client, err = app.Messaging(context.Background())
-		if err != nil {
-			logger.Warn("Failed to get messaging client", zap.Error(err))
-		}
-	}
+func NewPushHandler(msgClient *messaging.Client, repo repository.NotificationRepository, logger *zap.Logger) *PushHandler {
 	return &PushHandler{
-		client:     client,
+		client:     msgClient,
 		repo:       repo,
 		logger:     logger,
 		deviceToks: make(map[string]string),
-	}, nil
+	}
 }
 
 type TokenRequest struct {

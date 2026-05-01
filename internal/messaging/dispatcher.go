@@ -34,6 +34,21 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 		eventId = "unknown"
 	}
 
+	var envelope struct {
+		EventID string          `json:"eventId"`
+		Data    json.RawMessage `json:"data"`
+	}
+	var innerPayload []byte
+
+	if err := json.Unmarshal(delivery.Body, &envelope); err == nil && len(envelope.Data) > 0 {
+		if envelope.EventID != "" {
+			eventId = envelope.EventID
+		}
+		innerPayload = envelope.Data
+	} else {
+		innerPayload = delivery.Body
+	}
+
 	d.logger.Info("Received event", zap.String("eventId", eventId), zap.String("routingKey", delivery.RoutingKey))
 
 	ctx := context.Background() 
@@ -43,7 +58,7 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 	case "pet.report.created":
 		if d.emailHandler != nil {
 			var evt PetReportCreatedEvent
-			if err := json.Unmarshal(delivery.Body, &evt); err == nil {
+			if err := json.Unmarshal(innerPayload, &evt); err == nil {
 				err = d.emailHandler.HandlePetReportCreated(ctx, eventId, evt, rawPayload)
 				if err != nil {
 					d.logger.Error("Failed to handle pet.report.created email", zap.Error(err))
@@ -61,7 +76,7 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 	case "pet.report.reunited":
 		if d.emailHandler != nil {
 			var evt PetReportReunitedEvent
-			if err := json.Unmarshal(delivery.Body, &evt); err == nil {
+			if err := json.Unmarshal(innerPayload, &evt); err == nil {
 				err = d.emailHandler.HandlePetReportReunited(ctx, eventId, evt, rawPayload)
 				if err != nil {
 					d.logger.Error("Failed to handle pet.report.reunited email", zap.Error(err))
@@ -79,7 +94,7 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 	case "chat.message.sent":
 		if d.pushHandler != nil {
 			var evt ChatMessageSentEvent
-			if err := json.Unmarshal(delivery.Body, &evt); err == nil {
+			if err := json.Unmarshal(innerPayload, &evt); err == nil {
 				err = d.pushHandler.HandleChatMessageSent(ctx, eventId, evt, rawPayload)
 				if err != nil {
 					d.logger.Error("Failed to handle chat.message.sent push", zap.Error(err))
