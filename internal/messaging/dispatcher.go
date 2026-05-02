@@ -11,6 +11,7 @@ import (
 type EmailHandler interface {
 	HandlePetReportCreated(ctx context.Context, eventID string, evt PetReportCreatedEvent, rawPayload string) error
 	HandlePetReportReunited(ctx context.Context, eventID string, evt PetReportReunitedEvent, rawPayload string) error
+	HandleMatchFound(ctx context.Context, eventID string, evt MatchFoundEvent, rawPayload string) error
 }
 
 type PushHandler interface {
@@ -110,7 +111,21 @@ func (d *Dispatcher) Dispatch(delivery amqp091.Delivery) {
 		delivery.Ack(false)
 
 	case "match.found":
-		d.logger.Info("handler not implemented yet", zap.String("routingKey", delivery.RoutingKey))
+		if d.emailHandler != nil {
+			var evt MatchFoundEvent
+			if err := json.Unmarshal(innerPayload, &evt); err == nil {
+				err = d.emailHandler.HandleMatchFound(ctx, eventId, evt, rawPayload)
+				if err != nil {
+					d.logger.Error("Failed to handle match.found email", zap.Error(err))
+					delivery.Nack(false, false)
+					return
+				}
+			} else {
+				d.logger.Error("Failed to parse match.found", zap.Error(err))
+				delivery.Nack(false, false)
+				return
+			}
+		}
 		delivery.Ack(false)
 
 	default:

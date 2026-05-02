@@ -139,6 +139,72 @@ func (h *EmailHandler) HandlePetReportReunited(ctx context.Context, eventID stri
 	return nil
 }
 
+func (h *EmailHandler) HandleMatchFound(ctx context.Context, eventID string, evt messaging.MatchFoundEvent, rawPayload string) error {
+	exists, err := h.repo.ExistsByEventIDAndChannel(ctx, eventID, "email")
+	if err != nil {
+		return fmt.Errorf("failed to check idempotency: %w", err)
+	}
+	if exists {
+		h.logger.Info("skipping duplicate", zap.String("eventId", eventID), zap.String("channel", "email"))
+		return nil
+	}
+
+	from := mail.NewEmail("Adopti Notifications", h.fromEmail)
+	subject := "¡Posible coincidencia encontrada! — Adopti"
+
+	toEmail := h.testEmail
+	if toEmail == "" {
+		toEmail = "test@example.com"
+	}
+
+	species := ""
+	city := ""
+	if v, ok := evt.Criteria["species"].(string); ok {
+		species = v
+	}
+	if v, ok := evt.Criteria["city"].(string); ok {
+		city = v
+	}
+
+	content := fmt.Sprintf(
+		"Detectamos una posible coincidencia entre el reporte perdido #%d y el reporte encontrado #%d (score: %.2f%s%s). Revisa la app para ver más detalles.",
+		evt.LostPetID,
+		evt.FoundPetID,
+		evt.Score,
+		formatCriterion(", especie: ", species),
+		formatCriterion(", ciudad: ", city),
+	)
+
+	to := mail.NewEmail("Adopti User", toEmail)
+	message := mail.NewSingleEmail(from, subject, to, content, content)
+	client := sendgrid.NewSendClient(h.apiKey)
+
+	userID := fmt.Sprintf("lost:%d", evt.LostPetID)
+	response, err := client.Send(message)
+	if err != nil || response.StatusCode >= 400 {
+		_ = h.persist(ctx, eventID, "match.found", "failed", rawPayload, userID)
+		if err != nil {
+			return fmt.Errorf("failed to send email: %w", err)
+		}
+		if response != nil {
+			return fmt.Errorf("sendgrid returned status %d: %s", response.StatusCode, response.Body)
+		}
+		return fmt.Errorf("failed to send email")
+	}
+
+	if err := h.persist(ctx, eventID, "match.found", "sent", rawPayload, userID); err != nil {
+		h.logger.Error("failed to persist notification", zap.Error(err))
+	}
+	return nil
+}
+
+func formatCriterion(label, value string) string {
+	if value == "" {
+		return ""
+	}
+	return label + value
+}
+
 func (h *EmailHandler) persist(ctx context.Context, eventID, eventType, status, payload, userID string) error {
 	n := &domain.Notification{
 		UserID:    userID,
