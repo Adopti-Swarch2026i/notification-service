@@ -1,6 +1,6 @@
 module github.com/adopti/notification-service
 
-go 1.26.1
+go 1.23
 
 require (
 	firebase.google.com/go/v4 v4.19.0

@@ -77,7 +77,7 @@ func main() {
 		}
 	}()
 
-	router := server.NewRouter(cfg.LogLevel, postgresRepo, pushHandler)
+	router := server.NewRouter(cfg.LogLevel, postgresRepo, pushHandler, authClient)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

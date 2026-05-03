@@ -25,10 +25,15 @@ type PetReportReunitedEvent struct {
 }
 
 type MatchFoundEvent struct {
-	LostPetID  int64          `json:"lostPetId"`
-	FoundPetID int64          `json:"foundPetId"`
-	Score      float64        `json:"score"`
-	Criteria   map[string]any `json:"criteria"`
+	LostPetID    int64          `json:"lostPetId"`
+	LostReportID int64          `json:"lostReportId"`
+	LostOwnerID  string         `json:"lostOwnerId"`
+	FoundPetID   int64          `json:"foundPetId"`
+	FoundReportID int64         `json:"foundReportId"`
+	FoundOwnerID string         `json:"foundOwnerId"`
+	Score        float64        `json:"score"`
+	Criteria     map[string]any `json:"criteria"`
+	MatchedAt    time.Time      `json:"matchedAt"`
 }
 
 type ChatMessageSentEvent struct {

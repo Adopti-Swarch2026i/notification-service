@@ -61,8 +61,10 @@ func (c *Consumer) connect() error {
 		return err
 	}
 
+	// events.md §1: x-message-ttl=86400000 (24h) y DLX obligatorios.
 	args := amqp091.Table{
 		"x-dead-letter-exchange": "adopti.events.dlx",
+		"x-message-ttl":          int32(86_400_000),
 	}
 
 	_, err = ch.QueueDeclare("notifications.queue", true, false, false, false, args)
@@ -72,7 +74,14 @@ func (c *Consumer) connect() error {
 		return err
 	}
 
-	for _, key := range []string{"pet.report.*", "chat.message.sent", "match.found"} {
+	// events.md §1 lista las routing keys exactas que esta queue debe recibir.
+	// `pet.report.updated` NO está aquí — solo lo consume matching-service.
+	for _, key := range []string{
+		"pet.report.created",
+		"pet.report.reunited",
+		"chat.message.sent",
+		"match.found",
+	} {
 		err = ch.QueueBind("notifications.queue", key, "adopti.events", false, nil)
 		if err != nil {
 			ch.Close()
