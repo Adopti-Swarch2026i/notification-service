@@ -43,13 +43,13 @@ func main() {
 	defer repoCancel()
 	postgresRepo, err := repository.NewPostgresRepo(repoCtx, cfg.PostgresDSN)
 	if err != nil {
-		logger.Fatal("Failed to initialize postgres repository", zap.Error(err))
+		logger.Fatal("Failed to initialize postgres repository", zap.String("error", config.SanitizeError(err)))
 	}
 
 	consumerCtx, consumerCancel := context.WithCancel(context.Background())
 	consumer, err := msg.NewConsumer(cfg.RabbitMQURL, logger)
 	if err != nil {
-		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.Error(err))
+		logger.Warn("RabbitMQ unavailable at startup, will keep trying", zap.String("error", config.SanitizeError(err)))
 	}
 
 	app, err := firebase.NewApp(context.Background(), nil)
@@ -92,7 +92,7 @@ func main() {
 	tlsCfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		ClientCAs:  caPool,
-		ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientAuth: tls.VerifyClientCertIfGiven,
 	}
 
 	srv := &http.Server{

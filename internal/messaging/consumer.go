@@ -2,8 +2,11 @@ package messaging
 
 import (
 	"context"
+	"crypto/tls"
+	"strings"
 	"time"
 
+	"github.com/adopti/notification-service/internal/config"
 	"github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -29,7 +32,13 @@ func NewConsumer(url string, logger *zap.Logger) (*Consumer, error) {
 func (c *Consumer) connect() error {
 	c.Close()
 
-	conn, err := amqp091.Dial(c.url)
+	var conn *amqp091.Connection
+	var err error
+	if strings.HasPrefix(c.url, "amqps://") {
+		conn, err = amqp091.DialTLS(c.url, &tls.Config{InsecureSkipVerify: true})
+	} else {
+		conn, err = amqp091.Dial(c.url)
+	}
 	if err != nil {
 		return err
 	}
@@ -121,7 +130,7 @@ func (c *Consumer) Start(ctx context.Context, dispatch func(amqp091.Delivery)) e
 
 		if c.conn == nil || c.conn.IsClosed() {
 			if err := c.connect(); err != nil {
-				c.logger.Error("Failed to connect to RabbitMQ, retrying...", zap.Error(err), zap.Duration("backoff", backoff))
+				c.logger.Error("Failed to connect to RabbitMQ, retrying...", zap.String("error", config.SanitizeError(err)), zap.Duration("backoff", backoff))
 				select {
 				case <-time.After(backoff):
 					backoff *= 2
@@ -148,7 +157,7 @@ func (c *Consumer) Start(ctx context.Context, dispatch func(amqp091.Delivery)) e
 			nil,
 		)
 		if err != nil {
-			c.logger.Error("Failed to consume, retrying...", zap.Error(err))
+			c.logger.Error("Failed to consume, retrying...", zap.String("error", config.SanitizeError(err)))
 			c.Close()
 			time.Sleep(backoff)
 			continue
@@ -163,7 +172,7 @@ func (c *Consumer) Start(ctx context.Context, dispatch func(amqp091.Delivery)) e
 				c.Close()
 				return ctx.Err()
 			case err := <-notifyClose:
-				c.logger.Warn("RabbitMQ connection closed", zap.Error(err))
+				c.logger.Warn("RabbitMQ connection closed", zap.String("error", config.SanitizeError(err)))
 				c.Close()
 				break consumeLoop
 			case d, ok := <-msgs:
