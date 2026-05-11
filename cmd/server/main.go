@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
@@ -77,15 +79,32 @@ func main() {
 
 	router := server.NewRouter(cfg.LogLevel, postgresRepo, pushHandler, authClient)
 
+	// ── TLS configuration (mTLS) ─────────────────────────
+	caPEM, err := os.ReadFile(cfg.TLSCAPath)
+	if err != nil {
+		logger.Fatal("Failed to read CA certificate", zap.Error(err))
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		logger.Fatal("Failed to append CA certificate to pool")
+	}
+
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ClientCAs:  caPool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+	}
+
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:      ":" + cfg.Port,
+		Handler:   router,
+		TLSConfig: tlsCfg,
 	}
 
 	go func() {
-		logger.Info("Starting server", zap.String("port", cfg.Port))
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatal("Listen and serve failed", zap.Error(err))
+		logger.Info("Starting HTTPS server", zap.String("port", cfg.Port))
+		if err := srv.ListenAndServeTLS(cfg.TLSCertPath, cfg.TLSKeyPath); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("ListenAndServeTLS failed", zap.Error(err))
 		}
 	}()
 

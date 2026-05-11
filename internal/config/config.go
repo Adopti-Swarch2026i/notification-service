@@ -14,6 +14,9 @@ type Config struct {
 	FirebaseCredentials string
 	LogLevel            string
 	TestEmail           string
+	TLSCertPath         string
+	TLSKeyPath          string
+	TLSCAPath           string
 }
 
 func Load() (*Config, error) {
@@ -26,6 +29,9 @@ func Load() (*Config, error) {
 		FirebaseCredentials: os.Getenv("FIREBASE_CREDENTIALS"),
 		LogLevel:            os.Getenv("LOG_LEVEL"),
 		TestEmail:           os.Getenv("TEST_EMAIL"),
+		TLSCertPath:         os.Getenv("TLS_CERT_PATH"),
+		TLSKeyPath:          os.Getenv("TLS_KEY_PATH"),
+		TLSCAPath:           os.Getenv("TLS_CA_PATH"),
 	}
 
 	if cfg.Port == "" {
