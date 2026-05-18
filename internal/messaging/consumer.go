@@ -3,6 +3,9 @@ package messaging
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -35,7 +38,19 @@ func (c *Consumer) connect() error {
 	var conn *amqp091.Connection
 	var err error
 	if strings.HasPrefix(c.url, "amqps://") {
-		conn, err = amqp091.DialTLS(c.url, &tls.Config{InsecureSkipVerify: true})
+		var caPEM []byte
+		caPEM, err = os.ReadFile("/app/certs/ca.crt")
+		if err != nil {
+			return err
+		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(caPEM) {
+			return fmt.Errorf("failed to append CA certificate to pool")
+		}
+		conn, err = amqp091.DialTLS(c.url, &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			RootCAs:    caPool,
+		})
 	} else {
 		conn, err = amqp091.Dial(c.url)
 	}
