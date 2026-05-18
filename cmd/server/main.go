@@ -52,19 +52,17 @@ func main() {
 
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
-		logger.Warn("Failed to initialize firebase app globally", zap.Error(err))
+		logger.Fatal("Failed to initialize firebase app globally", zap.Error(err))
 	}
 	var authClient *auth.Client
+	authClient, err = app.Auth(context.Background())
+	if err != nil {
+		logger.Fatal("Failed to allocate firebase Auth client", zap.Error(err))
+	}
 	var msgClient *messaging.Client
-	if app != nil {
-		authClient, err = app.Auth(context.Background())
-		if err != nil {
-			logger.Warn("Failed to allocate firebase Auth client", zap.Error(err))
-		}
-		msgClient, err = app.Messaging(context.Background())
-		if err != nil {
-			logger.Warn("Failed to allocate firebase Messaging client", zap.Error(err))
-		}
+	msgClient, err = app.Messaging(context.Background())
+	if err != nil {
+		logger.Warn("Failed to allocate firebase Messaging client (push degraded)", zap.Error(err))
 	}
 
 	pushHandler := handlers.NewPushHandler(msgClient, postgresRepo, logger)

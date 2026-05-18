@@ -94,14 +94,13 @@ func NewRouter(
 const ctxKeyUID = "uid"
 
 // requireFirebaseAuth valida el header `Authorization: Bearer <idToken>`.
-// Si el authClient es nil (Firebase no inicializó al boot), permite el
-// request — pero loggea claro: el operador debe arreglar credentials.
+// Si authClient es nil (no debería ocurrir tras el fail-fast del boot)
+// rechazamos el request con 503: sin autenticación no servimos endpoints
+// protegidos.
 func requireFirebaseAuth(authClient *auth.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if authClient == nil {
-			// Modo degradado: sin Firebase no podemos autenticar. Continuar
-			// sin uid para no bloquear la demo del prototipo.
-			c.Next()
+			c.AbortWithStatusJSON(503, gin.H{"error": "auth service unavailable"})
 			return
 		}
 		raw := c.GetHeader("Authorization")
