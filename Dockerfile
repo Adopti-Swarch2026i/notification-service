@@ -18,7 +18,7 @@ FROM alpine:3.19
 
 # ca-certificates es obligatorio para que las llamadas TLS a SendGrid y FCM
 # funcionen desde un contenedor alpine mínimo.
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates curl
 
 WORKDIR /app
 COPY --from=builder /app/notification-service .

@@ -92,7 +92,7 @@ func main() {
 	tlsCfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		ClientCAs:  caPool,
-		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientAuth: tls.RequireAndVerifyClientCert,
 	}
 
 	srv := &http.Server{
