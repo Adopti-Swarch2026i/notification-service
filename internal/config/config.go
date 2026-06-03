@@ -9,6 +9,7 @@ type Config struct {
 	Port                string
 	RabbitMQURL         string
 	PostgresDSN         string
+	PostgresReplicaDSN  string
 	SendGridAPIKey      string
 	SendGridFromEmail   string
 	FirebaseCredentials string
@@ -24,6 +25,7 @@ func Load() (*Config, error) {
 		Port:                os.Getenv("PORT"),
 		RabbitMQURL:         os.Getenv("RABBITMQ_URL"),
 		PostgresDSN:         os.Getenv("POSTGRES_DSN"),
+		PostgresReplicaDSN:  os.Getenv("POSTGRES_REPLICA_DSN"),
 		SendGridAPIKey:      os.Getenv("SENDGRID_API_KEY"),
 		SendGridFromEmail:   os.Getenv("SENDGRID_FROM_EMAIL"),
 		FirebaseCredentials: os.Getenv("FIREBASE_CREDENTIALS"),

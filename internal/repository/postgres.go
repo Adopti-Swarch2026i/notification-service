@@ -15,24 +15,34 @@ import (
 )
 
 type PostgresRepo struct {
-	pool *pgxpool.Pool
+	writePool *pgxpool.Pool
+	readPool  *pgxpool.Pool
 }
 
-func NewPostgresRepo(ctx context.Context, dsn string) (*PostgresRepo, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+func NewPostgresRepo(ctx context.Context, writeDSN, readDSN string) (*PostgresRepo, error) {
+	writePool, err := pgxpool.New(ctx, writeDSN)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+		return nil, fmt.Errorf("failed to connect to postgres (write): %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
+	if err := writePool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping postgres (write): %w", err)
 	}
 
-	if err := runMigrations(ctx, pool, "migrations"); err != nil {
+	if err := runMigrations(ctx, writePool, "migrations"); err != nil {
 		return nil, err
 	}
 
-	return &PostgresRepo{pool: pool}, nil
+	// Fallback: si no hay DSN del replica, usa el master para ambos
+	if readDSN == "" {
+		readDSN = writeDSN
+	}
+	readPool, err := pgxpool.New(ctx, readDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to postgres (read): %w", err)
+	}
+
+	return &PostgresRepo{writePool: writePool, readPool: readPool}, nil
 }
 
 // runMigrations aplica todos los archivos *.sql del directorio en orden
@@ -75,7 +85,7 @@ func (r *PostgresRepo) Save(ctx context.Context, n *domain.Notification) error {
 		    created_at = EXCLUDED.created_at
 		RETURNING id
 	`
-	err := r.pool.QueryRow(ctx, query,
+	err := r.writePool.QueryRow(ctx, query,
 		n.UserID, n.EventID, n.EventType, n.Channel, n.Status, n.Payload, n.CreatedAt,
 	).Scan(&n.ID)
 
@@ -105,7 +115,7 @@ func (r *PostgresRepo) FindByUserID(ctx context.Context, userID, status string, 
 		args = append(args, limit, offset)
 	}
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.readPool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query notifications: %w", err)
 	}
@@ -131,7 +141,7 @@ func (r *PostgresRepo) ExistsByEventIDAndChannel(ctx context.Context, eventID, c
 		WHERE event_id = $1 AND channel = $2 AND status = 'sent'
 	)`
 	var exists bool
-	err := r.pool.QueryRow(ctx, query, eventID, channel).Scan(&exists)
+	err := r.readPool.QueryRow(ctx, query, eventID, channel).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
@@ -145,7 +155,7 @@ func (r *PostgresRepo) UpsertDeviceToken(ctx context.Context, userID, token stri
 		ON CONFLICT (user_id) DO UPDATE
 		SET token = EXCLUDED.token, updated_at = now()
 	`
-	if _, err := r.pool.Exec(ctx, query, userID, token); err != nil {
+	if _, err := r.writePool.Exec(ctx, query, userID, token); err != nil {
 		return fmt.Errorf("failed to upsert device token: %w", err)
 	}
 	return nil
@@ -153,7 +163,7 @@ func (r *PostgresRepo) UpsertDeviceToken(ctx context.Context, userID, token stri
 
 func (r *PostgresRepo) GetDeviceToken(ctx context.Context, userID string) (string, error) {
 	var token string
-	err := r.pool.QueryRow(ctx,
+	err := r.readPool.QueryRow(ctx,
 		`SELECT token FROM device_tokens WHERE user_id = $1`, userID,
 	).Scan(&token)
 	if err != nil {

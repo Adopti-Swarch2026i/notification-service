@@ -41,7 +41,7 @@ func main() {
 
 	repoCtx, repoCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer repoCancel()
-	postgresRepo, err := repository.NewPostgresRepo(repoCtx, cfg.PostgresDSN)
+	postgresRepo, err := repository.NewPostgresRepo(repoCtx, cfg.PostgresDSN, cfg.PostgresReplicaDSN)
 	if err != nil {
 		logger.Fatal("Failed to initialize postgres repository", zap.String("error", config.SanitizeError(err)))
 	}
