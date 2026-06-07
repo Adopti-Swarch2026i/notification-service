@@ -48,6 +48,22 @@ func NewPostgresRepo(ctx context.Context, writeDSN, readDSN string) (*PostgresRe
 // runMigrations aplica todos los archivos *.sql del directorio en orden
 // lexicográfico. Cada archivo debe ser idempotente (CREATE TABLE IF NOT EXISTS).
 func runMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection for migrations: %w", err)
+	}
+	defer conn.Release()
+
+	// Acquire advisory lock to prevent concurrent migrations
+	lockKey := int64(20260602)
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", lockKey); err != nil {
+		return fmt.Errorf("failed to acquire migration lock: %w", err)
+	}
+	defer func() {
+		// Use Background context to ensure unlock succeeds even if original ctx is canceled
+		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", lockKey)
+	}()
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("failed to read migrations dir: %w", err)
@@ -64,7 +80,7 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read migration %s: %w", name, err)
 		}
-		if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
+		if _, err := conn.Exec(ctx, string(sqlBytes)); err != nil {
 			return fmt.Errorf("failed to execute migration %s: %w", name, err)
 		}
 	}
