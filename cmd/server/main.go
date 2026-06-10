@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/adopti/notification-service/internal/config"
+	"github.com/adopti/notification-service/internal/discovery"
 	"github.com/adopti/notification-service/internal/handlers"
 	msg "github.com/adopti/notification-service/internal/messaging"
 	"github.com/adopti/notification-service/internal/repository"
@@ -108,10 +109,14 @@ func main() {
 		}
 	}()
 
+	discovery.Register(logger)
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down server...")
+
+	discovery.Deregister(logger)
 
 	consumerCancel()
 	consumer.Close()
